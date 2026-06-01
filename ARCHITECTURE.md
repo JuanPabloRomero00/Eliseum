@@ -1,4 +1,4 @@
-# The Guardian - Micro-Orquestador de Ingesta y Monitoreo Reactivo
+# Eliseum - Micro-Orquestador de Ingesta y Monitoreo Reactivo
 
 **Trabajo Práctico Nº 2 - Programación sobre Redes**
 

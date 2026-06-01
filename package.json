@@ -1,5 +1,5 @@
 {
-  "name": "the-guardian",
+  "name": "eliseum",
   "version": "1.0.0",
   "private": true,
   "description": "Micro-orquestador de ingesta y monitoreo reactivo",

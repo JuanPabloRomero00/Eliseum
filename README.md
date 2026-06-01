@@ -1,4 +1,4 @@
-# The Guardian
+# Eliseum
 
 Micro-orquestador de ingesta y monitoreo reactivo implementado con Node.js nativo.
 
