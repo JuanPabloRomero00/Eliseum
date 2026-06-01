@@ -7,7 +7,7 @@ function createRoutes({ healthHandler, ingestHandler, chaosHandler }) {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
 
     if (request.method === "GET" && pathname === HEALTH_PATH) {
-      healthHandler(request, response);
+      await healthHandler(request, response);
       return;
     }
 

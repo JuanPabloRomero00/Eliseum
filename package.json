@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/app.js",
     "start:single": "node src/server.js",
-    "test:load": "node test/load-test.js"
+    "test:load": "node test/load-test.js",
+    "test:resilience": "set INTERLEAVED_CHAOS=1&& node test/load-test.js"
   }
 }

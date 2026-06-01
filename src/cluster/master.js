@@ -5,6 +5,8 @@ const { buildWorkerBar } = require("../utils/helpers");
 function startMaster() {
   let totalCount = 0;
   let restartCount = 0;
+  let isShuttingDown = false;
+  const processedIngestIds = new Set();
 
   function logClusterEvent(label, details) {
     const activeWorkers = Object.values(cluster.workers).filter(Boolean).length;
@@ -36,6 +38,7 @@ function startMaster() {
 
     worker.on("online", () => {
       logClusterEvent("UP   +", `worker=${worker.process.pid}`);
+      broadcastTotalCount();
     });
 
     worker.on("message", (message) => {
@@ -44,11 +47,51 @@ function startMaster() {
         return;
       }
 
+      if (message.type === "read-total-count") {
+        if (message.payload?.requestId && worker.isConnected()) {
+          try {
+            worker.send({
+              type: "total-count-ack",
+              payload: {
+                requestId: message.payload.requestId,
+                totalCount,
+              },
+            });
+          } catch (_error) {
+          }
+        }
+
+        return;
+      }
+
       if (message.type !== "increment") {
         return;
       }
 
-      totalCount += 1;
+      const ingestId = message.payload?.ingestId;
+      const isKnownIngestId = Number.isInteger(ingestId) && ingestId >= 0;
+
+      if (!isKnownIngestId || !processedIngestIds.has(ingestId)) {
+        totalCount += 1;
+
+        if (isKnownIngestId) {
+          processedIngestIds.add(ingestId);
+        }
+      }
+
+      if (message.payload?.requestId && worker.isConnected()) {
+        try {
+          worker.send({
+            type: "increment-ack",
+            payload: {
+              requestId: message.payload.requestId,
+              totalCount,
+            },
+          });
+        } catch (_error) {
+        }
+      }
+
       broadcastTotalCount();
     });
 
@@ -67,6 +110,14 @@ function startMaster() {
   }
 
   cluster.on("exit", (worker, code, signal) => {
+    if (isShuttingDown) {
+      logClusterEvent(
+        "STOP  -",
+        `worker=${worker.process.pid} code=${code} signal=${signal || "none"}`
+      );
+      return;
+    }
+
     restartCount += 1;
     logClusterEvent(
       "DOWN x",
@@ -78,6 +129,34 @@ function startMaster() {
   });
 
   logClusterEvent("BOOT  ", "cluster starting");
+
+  function shutdown() {
+    if (isShuttingDown) {
+      return;
+    }
+
+    isShuttingDown = true;
+    logClusterEvent("HALT  ", "cluster shutting down");
+
+    for (const worker of Object.values(cluster.workers)) {
+      if (!worker) {
+        continue;
+      }
+
+      worker.disconnect();
+
+      if (!worker.process.killed) {
+        worker.process.kill("SIGTERM");
+      }
+    }
+
+    cluster.disconnect(() => {
+      process.exit(0);
+    });
+  }
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 module.exports = {

@@ -18,21 +18,38 @@ function createIngestionService({ onGlobalIncrement }) {
       return;
     }
 
-    pendingRequests.delete(message.requestId);
-
-    if (onGlobalIncrement) {
-      onGlobalIncrement({
-        pid: process.pid,
-        localCount: message.localCount,
+    Promise.resolve(
+      onGlobalIncrement
+        ? onGlobalIncrement({
+            ingestId: message.ingestId,
+            pid: process.pid,
+            localCount: message.localCount,
+          })
+        : message.sharedCount
+    )
+      .then((totalCount) => {
+        pendingRequests.delete(message.requestId);
+        pendingRequest.resolve({
+          pid: process.pid,
+          ingestId: message.ingestId,
+          result: message.result,
+          localCount: message.localCount,
+          sharedCount: totalCount,
+          totalCount,
+        });
+      })
+      .catch((error) => {
+        pendingRequests.delete(message.requestId);
+        pendingRequest.reject(
+          createAppError({
+            code: ERROR_CODES.WORKER_IPC_SEND_FAILED,
+            statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
+            message: "Could not consolidate global ingest count",
+            details: `requestId=${message.requestId} ingestId=${message.ingestId}`,
+            cause: error,
+          })
+        );
       });
-    }
-
-    pendingRequest.resolve({
-      ingestId: message.ingestId,
-      result: message.result,
-      localCount: message.localCount,
-      sharedCount: message.sharedCount,
-    });
   });
 
   ingestionThread.on("error", (error) => {

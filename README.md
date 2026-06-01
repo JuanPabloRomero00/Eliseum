@@ -9,6 +9,7 @@ El sistema recibe ráfagas de requests a `/ingest`, delega el trabajo pesado a u
 ## Requisitos que cubre
 
 - `cluster` usando la mitad de los núcleos disponibles.
+- distribución `round robin` de conexiones entre workers.
 - recreación automática de workers caídos.
 - endpoint `/health` con respuesta inmediata.
 - endpoint `/ingest?id=...` con cálculo pesado fuera del hilo principal.
@@ -38,6 +39,8 @@ test/
 ## Endpoints
 
 ### `GET /health`
+
+El `totalCount` global se consolida en el master de forma idempotente por `ingestId`, para no duplicar eventos si una ingesta se reintenta durante una caida o reinicio.
 
 Devuelve el estado del worker que atendió la request.
 
@@ -115,6 +118,7 @@ Scripts disponibles:
 npm start
 npm run start:single
 npm run test:load
+npm run test:resilience
 ```
 
 ### `npm start`
@@ -137,6 +141,32 @@ Ejecuta la validación completa:
 6. ejecuta un `chaos drill` sobre `/chaos`;
 7. verifica que el sistema siga respondiendo después de la caída y reposición de workers.
 
+Si querés correr la simulación contra una app ya levantada aparte, usá:
+
+```bash
+USE_EXISTING_SERVER=1 npm run test:load
+```
+
+En Windows PowerShell:
+
+```powershell
+$env:USE_EXISTING_SERVER="1"
+npm run test:load
+```
+
+### `npm run test:resilience`
+
+En este modo, el cliente reintenta fallas transitorias de red o respuestas `5xx`, y el contador global mantiene exactitud sin duplicar ingestas ya consolidadas.
+
+Ejecuta una variante mÃ¡s agresiva:
+
+1. dispara `500` requests concurrentes a `/ingest`;
+2. dispara requests paralelas a `/health`;
+3. dispara requests a `/chaos` al mismo tiempo que la carga;
+4. verifica que el `totalCount` final siga avanzando correctamente aunque haya caÃ­das y reposiciÃ³n de workers.
+
+Sirve para observar resiliencia bajo carga real, no solo despuÃ©s de la carga.
+
 ## Variables de entorno
 
 Todas son opcionales.
@@ -146,12 +176,15 @@ PORT=8080
 HOST=127.0.0.1
 SIMULATED_CRASH_PROBABILITY=0.25
 BASE_URL=http://127.0.0.1:8080
+REQUEST_LOGGING_ENABLED=1
 ```
 
 Notas:
 
 - `SIMULATED_CRASH_PROBABILITY` define qué porcentaje de workers nacen armados para caer ante `/chaos`.
 - `BASE_URL` se usa en el script de prueba.
+- `REQUEST_LOGGING_ENABLED=0` desactiva el log por request, útil para `npm run test:load`.
+- `USE_EXISTING_SERVER=1` hace que el script de carga no levante la app y use una instancia ya corriendo.
 
 ## Qué se ve en consola
 
@@ -188,4 +221,5 @@ Interpretación:
 
 - `/health` sigue siendo responsivo bajo carga, pero su latencia no es necesariamente cercana a `0ms` en una máquina real.
 - El `totalCount` global consolidado depende del flujo de mensajes IPC entre workers y master.
+- La deduplicacion global asume que cada evento conserve un `ingestId` estable entre retries.
 - La simulación de caída está pensada para demo y evaluación, no para un entorno productivo.
