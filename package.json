@@ -1,0 +1,12 @@
+{
+  "name": "the-guardian",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Micro-orquestador de ingesta y monitoreo reactivo",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "start:single": "node src/server.js",
+    "test:load": "node test/load-test.js"
+  }
+}
